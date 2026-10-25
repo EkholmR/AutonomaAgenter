@@ -1613,13 +1613,15 @@ MonoBehaviour:
   agentParameters:
     maxStep: 0
   hasUpgradedFromAgentParameters: 1
-  MaxStep: 3000
+  MaxStep: 5000
   meetingPoint: {fileID: 2104494888}
+  terrain: {fileID: 1221697334}
+  edgeMargin: 10
+  minSpawnDistance: 20
   arrivalRadius: 3
   stopSpeed: 0.3
   stopDecisions: 30
   maxSpeed: 15
-  maxDistance: 50
 --- !u!114 &1935619485
 MonoBehaviour:
   m_ObjectHideFlags: 0
