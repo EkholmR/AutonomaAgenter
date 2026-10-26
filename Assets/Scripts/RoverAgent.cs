@@ -8,6 +8,7 @@ public class RoverAgent : Agent
 {
     public Transform meetingPoint;
     public Terrain terrain;               // used to find the spawn area and the ground height
+    public TerrainGenerator generator;    // builds new hills every episode (can be left empty)
     public float edgeMargin = 10f;        // keep spawns this far from the terrain edge
     public float minSpawnDistance = 20f;  // minimum distance between start and meeting point
     public float arrivalRadius = 3f;      // how close counts as "at the meeting point"
@@ -44,6 +45,15 @@ public class RoverAgent : Agent
         return terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.transform.position.y;
     }
 
+    // Tilts the truck to match the slope under it, with a random heading
+    private Quaternion GroundRotation(float x, float z, float yaw)
+    {
+        Vector3 o = terrain.transform.position;
+        Vector3 s = terrain.terrainData.size;
+        Vector3 normal = terrain.terrainData.GetInterpolatedNormal((x - o.x) / s.x, (z - o.z) / s.z);
+        return Quaternion.FromToRotation(Vector3.up, normal) * Quaternion.Euler(0f, yaw, 0f);
+    }
+
     private Vector3 RandomPoint()
     {
         Vector3 o = terrain.transform.position;
@@ -62,6 +72,9 @@ public class RoverAgent : Agent
 
     public override void OnEpisodeBegin()
     {
+        // New hills first, so the truck and the target are placed on the new ground
+        if (generator != null) generator.Generate();
+
         // Pick a start and a target that aren't too close to each other
         Vector3 start, target;
         int tries = 0;
@@ -75,9 +88,9 @@ public class RoverAgent : Agent
 
         meetingPoint.position = new Vector3(target.x, GroundY(target.x, target.z) + targetHeightOffset, target.z);
 
-        Quaternion rot = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f); // random heading
+        Quaternion rot = GroundRotation(start.x, start.z, Random.Range(0f, 360f));
         transform.SetPositionAndRotation(
-            new Vector3(start.x, GroundY(start.x, start.z) + roverHeightOffset, start.z), rot);
+            new Vector3(start.x, GroundY(start.x, start.z) + roverHeightOffset + 0.2f, start.z), rot);
 
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
@@ -108,6 +121,8 @@ public class RoverAgent : Agent
         sensor.AddObservation(localVel.z / maxSpeed);                  // 5: forward speed
         sensor.AddObservation(rb.angularVelocity.y);                   // 6: turning rate
         sensor.AddObservation(Vector3.Dot(transform.up, Vector3.up));  // 7: how upright it is
+        sensor.AddObservation(transform.forward.y);                    // 8: nose up (+) or down (-) a slope
+        sensor.AddObservation(transform.right.y);                      // 9: leaning right (+) or left (-)
     }
 
     public override void OnActionReceived(ActionBuffers actions)
@@ -118,12 +133,11 @@ public class RoverAgent : Agent
         float dist = FlatDistance();
         float speed = rb.linearVelocity.magnitude;
 
-        // Reward getting closer, with a small penalty for every step
-               // Reward getting closer
+        // Reward getting closer
         AddReward((prevDist - dist) * 0.1f);
         prevDist = dist;
 
-        // Time pressure: a slow episode now costs noticeably more
+        // Time pressure: a slow episode costs noticeably more
         AddReward(-0.002f);
 
         if (dist > arrivalRadius)
@@ -142,8 +156,7 @@ public class RoverAgent : Agent
             Vector3 localVel = transform.InverseTransformDirection(rb.linearVelocity);
             if (localVel.z < 0f) AddReward(localVel.z * 0.004f);
         }
-
-        if (dist < arrivalRadius)
+        else
         {
             // Inside the meeting area: slow down and stay put
             AddReward(-speed * 0.002f);
@@ -158,10 +171,8 @@ public class RoverAgent : Agent
                 return;
             }
         }
-        else
-        {
-            stoppedCount = 0;
-        }
+
+        if (dist > arrivalRadius) stoppedCount = 0;
 
         // Failure: flipped over, fell off, or left the terrain
         Vector3 pos = transform.position;
