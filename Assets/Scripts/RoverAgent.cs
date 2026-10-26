@@ -119,9 +119,29 @@ public class RoverAgent : Agent
         float speed = rb.linearVelocity.magnitude;
 
         // Reward getting closer, with a small penalty for every step
+               // Reward getting closer
         AddReward((prevDist - dist) * 0.1f);
-        AddReward(-0.001f);
         prevDist = dist;
+
+        // Time pressure: a slow episode now costs noticeably more
+        AddReward(-0.002f);
+
+        if (dist > arrivalRadius)
+        {
+            // Small reward for facing the target, so it turns instead of looping
+            Vector3 toTarget = meetingPoint.position - transform.position;
+            toTarget.y = 0f;
+            Vector3 fwd = transform.forward;
+            fwd.y = 0f;
+            if (toTarget.sqrMagnitude > 0.01f && fwd.sqrMagnitude > 0.01f)
+            {
+                AddReward(Vector3.Dot(fwd.normalized, toTarget.normalized) * 0.002f);
+            }
+
+            // Small penalty for reversing (localVel.z is negative when backing up)
+            Vector3 localVel = transform.InverseTransformDirection(rb.linearVelocity);
+            if (localVel.z < 0f) AddReward(localVel.z * 0.004f);
+        }
 
         if (dist < arrivalRadius)
         {

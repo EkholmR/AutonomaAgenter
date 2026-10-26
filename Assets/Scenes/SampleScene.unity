@@ -1646,7 +1646,7 @@ MonoBehaviour:
     hasUpgradedBrainParametersWithActionSpec: 1
   m_Model: {fileID: 5022602860645237092, guid: 17f3aff0f6c229b4fad1b815237be819, type: 3}
   m_InferenceDevice: 0
-  m_BehaviorType: 2
+  m_BehaviorType: 0
   m_BehaviorName: Rover
   TeamId: 0
   m_UseChildSensors: 1
