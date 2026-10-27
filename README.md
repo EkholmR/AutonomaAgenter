@@ -2,7 +2,7 @@
 
 A truck (the rover) trained with reinforcement learning to drive to a meeting point over hilly terrain and avoid buildings and rocks. The drone is flown manually in the demonstration.
 
-**Demo video:** <link>
+
 
 ## What was trained
 
@@ -21,7 +21,7 @@ The rover agent (`Assets/Scripts/RoverAgent.cs`) outputs steering and throttle. 
 ## Run the demo
 
 1. Open the project with Unity `6000.5.9f1`. The ML-Agents package (`com.unity.ml-agents` 4.0.3) is installed from `Packages/manifest.json`.
-2. Open the scene `<scene name>`.
+2. Open the scene.
 3. Press Play. The rover drives by itself (Behavior Type: Inference Only, model `Rover_L5`) and stays parked at the meeting point (Demo Mode).
 4. Fly the drone with W, A, S, D, R and F.
 
@@ -43,6 +43,4 @@ Set Behavior Type to Default on the Truck, then from the project root:
 and press Play in the Editor. Stop with Ctrl+C once, and copy `results/<run-id>/Rover.onnx` into `Assets`.
 
 ## Notes
-
-- Training output (`results/`) is not in the repo.
 - Braking: in agent mode, a throttle command against the direction of travel brakes the truck (`CarControl.cs`).
