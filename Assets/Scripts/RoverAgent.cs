@@ -132,16 +132,17 @@ public class RoverAgent : Agent
 
         float dist = FlatDistance();
         float speed = rb.linearVelocity.magnitude;
+        Vector3 localVel = transform.InverseTransformDirection(rb.linearVelocity);
 
-        // Reward getting closer
+        // Reward getting closer, with time pressure
         AddReward((prevDist - dist) * 0.1f);
         prevDist = dist;
-
-        // Time pressure: a slow episode costs noticeably more
-        AddReward(-0.002f);
+        AddReward(-0.001f);
 
         if (dist > arrivalRadius)
         {
+            stoppedCount = 0;
+
             // Small reward for facing the target, so it turns instead of looping
             Vector3 toTarget = meetingPoint.position - transform.position;
             toTarget.y = 0f;
@@ -152,14 +153,22 @@ public class RoverAgent : Agent
                 AddReward(Vector3.Dot(fwd.normalized, toTarget.normalized) * 0.002f);
             }
 
-            // Small penalty for reversing (localVel.z is negative when backing up)
-            Vector3 localVel = transform.InverseTransformDirection(rb.linearVelocity);
+            // Small penalty for reversing
             if (localVel.z < 0f) AddReward(localVel.z * 0.004f);
+
+            // NEW: slow down on the approach. The closer it gets, the lower the allowed speed
+            float slowRadius = 15f;
+            if (dist < slowRadius)
+            {
+                float allowed = Mathf.Max(1f, 8f * dist / slowRadius);
+                AddReward(-Mathf.Max(0f, speed - allowed) * 0.01f);
+            }
         }
         else
         {
-            // Inside the meeting area: slow down and stay put
-            AddReward(-speed * 0.002f);
+            // NEW: being in the meeting area is rewarded, and speed is punished harder
+            AddReward(0.005f);
+            AddReward(-speed * 0.01f);
 
             if (speed < stopSpeed) stoppedCount++;
             else stoppedCount = 0;
@@ -172,15 +181,13 @@ public class RoverAgent : Agent
             }
         }
 
-        if (dist > arrivalRadius) stoppedCount = 0;
-
         // Failure: flipped over, fell off, or left the terrain
         Vector3 pos = transform.position;
         bool flipped = Vector3.Dot(transform.up, Vector3.up) < 0.3f;
         bool fell = pos.y < GroundY(pos.x, pos.z) - 10f;
         if (flipped || fell || !InsideTerrain(pos))
         {
-            AddReward(-1f);
+            AddReward(-3f);
             EndEpisode();
         }
     }

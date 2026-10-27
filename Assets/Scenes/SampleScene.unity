@@ -1635,9 +1635,9 @@ MonoBehaviour:
   generator: {fileID: 1221697336}
   edgeMargin: 10
   minSpawnDistance: 20
-  arrivalRadius: 3
-  stopSpeed: 0.3
-  stopDecisions: 30
+  arrivalRadius: 4
+  stopSpeed: 0.5
+  stopDecisions: 15
   maxSpeed: 15
 --- !u!114 &1935619485
 MonoBehaviour:
@@ -1661,9 +1661,9 @@ MonoBehaviour:
     VectorActionDescriptions: []
     VectorActionSpaceType: 1
     hasUpgradedBrainParametersWithActionSpec: 1
-  m_Model: {fileID: 5022602860645237092, guid: af6456972f36043459b1bf862ec8580c, type: 3}
+  m_Model: {fileID: 5022602860645237092, guid: 712eeff2a8c66e5499e3af45b29ae55a, type: 3}
   m_InferenceDevice: 0
-  m_BehaviorType: 1
+  m_BehaviorType: 2
   m_BehaviorName: Rover
   TeamId: 0
   m_UseChildSensors: 1

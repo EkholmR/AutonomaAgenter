@@ -61,7 +61,23 @@ public class CarControl : MonoBehaviour
         }
 
         // Brake only in agent mode, and only when no throttle is given
-        float brake = (externalControl && Mathf.Abs(throttle) < 0.05f) ? brakeTorque : 0f;
+        // Agent mode: a command against the direction of travel brakes, and no throttle brakes lightly
+float brake = 0f;
+float motor = throttle * enginePower;
+if (externalControl)
+{
+    float forwardSpeed = transform.InverseTransformDirection(rb.linearVelocity).z;
+    bool opposing = throttle * forwardSpeed < 0f && Mathf.Abs(forwardSpeed) > 0.5f;
+    if (opposing)
+    {
+        brake = brakeTorque;
+        motor = 0f;
+    }
+    else if (Mathf.Abs(throttle) < 0.1f)
+    {
+        brake = brakeTorque * 0.3f;
+    }
+}
 
         // Calculate turn angle
         float targetTurnAngle = horizontalInput * turnSpeed;
@@ -83,7 +99,7 @@ public class CarControl : MonoBehaviour
             }
 
             // Wheels driving (forward/backward movement)
-            wheelCollider.motorTorque = throttle * enginePower;
+            wheelCollider.motorTorque = motor;
             wheelCollider.brakeTorque = brake;
 
             // Rotate wheel meshes
