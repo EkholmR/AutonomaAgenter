@@ -9,11 +9,13 @@ public class RoverAgent : Agent
     public Transform meetingPoint;
     public Terrain terrain;               // used to find the spawn area and the ground height
     public TerrainGenerator generator;    // builds new hills every episode (can be left empty)
+    public Transform[] obstacles;         // buildings and rocks: fixed X/Z, height follows the ground
+    public float obstacleClearance = 8f;  // keep spawns this far from every obstacle
     public float edgeMargin = 10f;        // keep spawns this far from the terrain edge
     public float minSpawnDistance = 20f;  // minimum distance between start and meeting point
-    public float arrivalRadius = 3f;      // how close counts as "at the meeting point"
-    public float stopSpeed = 0.3f;        // below this speed counts as stopped
-    public int stopDecisions = 30;        // decisions in a row it has to stay stopped
+    public float arrivalRadius = 4f;      // how close counts as "at the meeting point"
+    public float stopSpeed = 0.5f;        // below this speed counts as stopped
+    public int stopDecisions = 15;        // decisions in a row it has to stay stopped
     public float maxSpeed = 15f;          // only used to scale the observations
 
     private float maxDistance = 100f;     // set from the terrain size in Initialize
@@ -21,6 +23,7 @@ public class RoverAgent : Agent
     private Rigidbody rb;
     private float roverHeightOffset;
     private float targetHeightOffset;
+    private float[] obstacleHeightOffsets;
     private float prevDist;
     private int stoppedCount;
 
@@ -30,11 +33,18 @@ public class RoverAgent : Agent
         rb = GetComponent<Rigidbody>();
         car.externalControl = true; // the agent drives, not the keyboard
 
-        // Remember how high above the ground the truck and the meeting point were placed
+        // Remember how high above the ground everything was placed in the scene
         Vector3 p = transform.position;
         roverHeightOffset = p.y - GroundY(p.x, p.z);
         Vector3 m = meetingPoint.position;
         targetHeightOffset = m.y - GroundY(m.x, m.z);
+
+        obstacleHeightOffsets = new float[obstacles.Length];
+        for (int i = 0; i < obstacles.Length; i++)
+        {
+            Vector3 o = obstacles[i].position;
+            obstacleHeightOffsets[i] = o.y - GroundY(o.x, o.z);
+        }
 
         Vector3 size = terrain.terrainData.size;
         maxDistance = new Vector2(size.x, size.z).magnitude; // the diagonal, so the scaling is 0..1
@@ -63,6 +73,27 @@ public class RoverAgent : Agent
         return new Vector3(x, 0f, z);
     }
 
+    // True if the point is clear of every obstacle (compared on the ground plane)
+    private bool IsClear(Vector3 p)
+    {
+        foreach (Transform t in obstacles)
+        {
+            Collider c = t.GetComponentInChildren<Collider>();
+            if (c == null) continue;
+            Bounds b = c.bounds;
+            b.Expand(obstacleClearance * 2f);
+            if (p.x > b.min.x && p.x < b.max.x && p.z > b.min.z && p.z < b.max.z) return false;
+        }
+        return true;
+    }
+
+    private Vector3 RandomClearPoint()
+    {
+        Vector3 p = RandomPoint();
+        for (int i = 0; i < 100 && !IsClear(p); i++) p = RandomPoint();
+        return p;
+    }
+
     private bool InsideTerrain(Vector3 p)
     {
         Vector3 o = terrain.transform.position;
@@ -72,16 +103,24 @@ public class RoverAgent : Agent
 
     public override void OnEpisodeBegin()
     {
-        // New hills first, so the truck and the target are placed on the new ground
+        // New hills first, then everything is placed on the new ground
         if (generator != null) generator.Generate();
 
-        // Pick a start and a target that aren't too close to each other
+        // Obstacles keep their X/Z, but follow the new ground height
+        for (int i = 0; i < obstacles.Length; i++)
+        {
+            Vector3 o = obstacles[i].position;
+            obstacles[i].position = new Vector3(o.x, GroundY(o.x, o.z) + obstacleHeightOffsets[i], o.z);
+        }
+        Physics.SyncTransforms(); // so the colliders are in place before spawning
+
+        // Pick a start and a target in free spots, and not too close to each other
         Vector3 start, target;
         int tries = 0;
         do
         {
-            start = RandomPoint();
-            target = RandomPoint();
+            start = RandomClearPoint();
+            target = RandomClearPoint();
             tries++;
         }
         while (Vector3.Distance(start, target) < minSpawnDistance && tries < 50);
@@ -123,6 +162,7 @@ public class RoverAgent : Agent
         sensor.AddObservation(Vector3.Dot(transform.up, Vector3.up));  // 7: how upright it is
         sensor.AddObservation(transform.forward.y);                    // 8: nose up (+) or down (-) a slope
         sensor.AddObservation(transform.right.y);                      // 9: leaning right (+) or left (-)
+        // The obstacle rays come from the Ray Perception Sensor component, not from here
     }
 
     public override void OnActionReceived(ActionBuffers actions)
@@ -156,7 +196,7 @@ public class RoverAgent : Agent
             // Small penalty for reversing
             if (localVel.z < 0f) AddReward(localVel.z * 0.004f);
 
-            // NEW: slow down on the approach. The closer it gets, the lower the allowed speed
+            // Slow down on the approach: the closer it gets, the lower the allowed speed
             float slowRadius = 15f;
             if (dist < slowRadius)
             {
@@ -166,7 +206,7 @@ public class RoverAgent : Agent
         }
         else
         {
-            // NEW: being in the meeting area is rewarded, and speed is punished harder
+            // Being in the meeting area is rewarded, and speed is punished harder
             AddReward(0.005f);
             AddReward(-speed * 0.01f);
 
@@ -186,6 +226,16 @@ public class RoverAgent : Agent
         bool flipped = Vector3.Dot(transform.up, Vector3.up) < 0.3f;
         bool fell = pos.y < GroundY(pos.x, pos.z) - 10f;
         if (flipped || fell || !InsideTerrain(pos))
+        {
+            AddReward(-3f);
+            EndEpisode();
+        }
+    }
+
+    // Hitting a building or a rock ends the episode
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Obstacle"))
         {
             AddReward(-3f);
             EndEpisode();
