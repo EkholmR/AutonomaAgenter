@@ -21,9 +21,11 @@ public class RoverAgent : Agent
     private float maxDistance = 100f;     // set from the terrain size in Initialize
     private CarControl car;
     private Rigidbody rb;
+    private Collider[] obstacleColliders;    
     private float roverHeightOffset;
     private float targetHeightOffset;
     private float[] obstacleHeightOffsets;
+    
     private float prevDist;
     private int stoppedCount;
 
@@ -39,11 +41,12 @@ public class RoverAgent : Agent
         Vector3 m = meetingPoint.position;
         targetHeightOffset = m.y - GroundY(m.x, m.z);
 
+         obstacleColliders = new Collider[obstacles.Length];
         obstacleHeightOffsets = new float[obstacles.Length];
         for (int i = 0; i < obstacles.Length; i++)
         {
-            Vector3 o = obstacles[i].position;
-            obstacleHeightOffsets[i] = o.y - GroundY(o.x, o.z);
+            obstacleColliders[i] = obstacles[i].GetComponentInChildren<Collider>();
+            obstacleHeightOffsets[i] = obstacles[i].position.y - LowestGround(i);
         }
 
         Vector3 size = terrain.terrainData.size;
@@ -53,6 +56,26 @@ public class RoverAgent : Agent
     private float GroundY(float x, float z)
     {
         return terrain.SampleHeight(new Vector3(x, 0f, z)) + terrain.transform.position.y;
+    }
+        // The lowest ground height under an obstacle's footprint (3x3 sample points)
+    private float LowestGround(int i)
+    {
+        Collider c = obstacleColliders[i];
+        Vector3 p = obstacles[i].position;
+        if (c == null) return GroundY(p.x, p.z);
+
+        Bounds b = c.bounds;
+        float low = float.MaxValue;
+        for (int ix = 0; ix <= 2; ix++)
+        {
+            for (int iz = 0; iz <= 2; iz++)
+            {
+                float x = Mathf.Lerp(b.min.x, b.max.x, ix / 2f);
+                float z = Mathf.Lerp(b.min.z, b.max.z, iz / 2f);
+                low = Mathf.Min(low, GroundY(x, z));
+            }
+        }
+        return low;
     }
 
     // Tilts the truck to match the slope under it, with a random heading
@@ -110,7 +133,7 @@ public class RoverAgent : Agent
         for (int i = 0; i < obstacles.Length; i++)
         {
             Vector3 o = obstacles[i].position;
-            obstacles[i].position = new Vector3(o.x, GroundY(o.x, o.z) + obstacleHeightOffsets[i], o.z);
+            obstacles[i].position = new Vector3(o.x, LowestGround(i) + obstacleHeightOffsets[i], o.z);
         }
         Physics.SyncTransforms(); // so the colliders are in place before spawning
 
@@ -232,13 +255,18 @@ public class RoverAgent : Agent
         }
     }
 
-    // Hitting a building or a rock ends the episode
+      // Hitting a building or a rock ends the episode
     private void OnCollisionEnter(Collision collision)
     {
-        if (collision.gameObject.CompareTag("Obstacle"))
+        Transform hit = collision.collider.transform;
+        foreach (Transform t in obstacles)
         {
-            AddReward(-3f);
-            EndEpisode();
+            if (hit == t || hit.IsChildOf(t))
+            {
+                AddReward(-3f);
+                EndEpisode();
+                return;
+            }
         }
     }
 
